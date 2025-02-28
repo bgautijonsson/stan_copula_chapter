@@ -1,0 +1,14 @@
+project:
+  type: website
+  title: "Copulas"
+  output-dir: docs
+  render: 
+    - index.qmd
+
+execute:
+  echo: true
+  warning: false
+  message: false
+  
+editor: source
+

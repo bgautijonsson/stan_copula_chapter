@@ -1,0 +1,159 @@
+---
+title: "Copulas"
+author: "Brynjólfur Gauti Guðrúnar Jónsson"
+format:
+  html: 
+    code-fold: show
+    toc: true
+    toc-location: left
+---
+
+# Copulas {#copulas.chapter}
+
+Copulas provide a flexible way to model multivariate distributions by separating the marginal distributions from the dependence structure. This chapter introduces copulas in Stan, focusing on implementation techniques and practical examples.
+
+## What Are Copulas?
+
+Copulas are functions that join univariate marginal distributions to form multivariate distributions. According to Sklar's theorem, any multivariate distribution can be expressed in terms of its marginals and a copula that captures the dependence structure.
+
+For a multivariate random variable $X = (X_1, \ldots, X_D)$ with marginal distribution functions $F_i$, the joint distribution can be written as:
+
+$$
+H(X) = C(F_1(X_1), \ldots, F_D(X_D))
+$$
+
+where $C$ is the copula function, $H$ is the joint cumulative distribution function, and $F_i$ are the marginal CDFs.
+
+## General Structure of Copula Models in Stan
+
+When implementing copulas in Stan, we follow a general pattern that separates the marginal distributions from the dependence structure. The log density of a multivariate distribution using a copula can be written as:
+
+$$
+\log h(X) = \log c\left(u_1, \dots, u_D \vert \theta_{c}\right) + \sum_{i=1}^D \log f_i(X_i \vert \theta_i)
+$$
+
+where:
+
+- $u_i = F_i(X_i \vert \theta_i)$ are the probability integral transforms of the data
+- $\log c\left(u_1, \dots, u_D \vert \theta_{c}\right)$ is the log density of the copula
+- $\sum_{i=1}^D \log f_i(X_i \vert \theta_i)$ is the sum of the log densities of the marginals
+
+A typical Stan model for copulas follows this structure:
+
+```stan
+functions {
+  // Copula log density function
+  real log_c(vector u, vector theta_c) {
+    // Implementation of specific copula log density
+    // ...
+  }
+}
+
+data {
+  int<lower=0> N;  // number of observations
+  int<lower=0> D;  // number of dimensions
+  matrix[N, D] X;  // data
+}
+
+parameters {
+  // Parameters for marginal distributions
+  vector[...] theta_marginal;
+  
+  // Parameters for copula
+  vector[...] theta_copula;
+}
+
+model {
+  // Priors for parameters
+  // ...
+  
+  // Likelihood
+  for (n in 1:N) {
+    vector[D] u;
+    
+    // Compute marginal log densities and CDFs
+    for (d in 1:D) {
+      // Add marginal log density to target
+      target += marginal_lpdf(X[n, d] | theta_marginal);
+      
+      // Transform to uniform using marginal CDF
+      u[d] = marginal_cdf(X[n, d] | theta_marginal);
+    }
+    
+    // Add copula log density to target
+    target += log_c(u | theta_copula);
+  }
+}
+```
+
+This structure highlights the two key components when modeling with copulas:
+
+1. We need both the PDFs and CDFs of the marginal distributions
+2. We need a function that computes the log density of the copula for the transformed data
+
+Even the independence assumption can be viewed as a special case of a copula (the independence copula), where $\log c(\mathbf{u}) = 0$, resulting in the familiar sum of marginal log densities.
+
+## Gaussian Copula Example
+
+The Gaussian copula is one of the most commonly used copulas due to its simplicity and interpretability. Here's a basic implementation in Stan:
+
+```stan
+data {
+  int<lower=0> N;  // number of observations
+  int<lower=0> D;  // number of dimensions
+  vector<lower=0>[D] y[N];  // data
+}
+
+parameters {
+  // Parameters for exponential marginal distributions
+  vector<lower=0>[D] lambda;  // rate parameters
+  
+  // Correlation matrix for Gaussian copula
+  cholesky_factor_corr[D] L_Omega;
+}
+
+model {
+  // Priors
+  lambda ~ gamma(2, 1);  // prior for rate parameters
+  L_Omega ~ lkj_corr_cholesky(2);
+  
+  // Likelihood using Gaussian copula with exponential marginals
+  for (n in 1:N) {
+    vector[D] z;
+    for (d in 1:D) {
+      // Add exponential log density to target
+      target += exponential_lpdf(y[n, d] | lambda[d]);
+      
+      // Transform to uniform using exponential CDF
+      real u_d = exponential_cdf(y[n, d], lambda[d]);
+      
+      // Transform to standard normal
+      z[d] = inv_Phi(u_d);
+    }
+    // Multivariate normal log density with correlation matrix
+    z ~ multi_normal_cholesky(rep_vector(0, D), L_Omega);
+  }
+}
+
+generated quantities {
+  // Recover correlation matrix from Cholesky factor
+  matrix[D, D] Omega = multiply_lower_tri_self_transpose(L_Omega);
+}
+```
+
+## Advantages of Copulas
+
+Copulas offer several advantages in statistical modeling:
+
+1. **Flexibility**: They allow combining any marginal distributions with various dependence structures.
+2. **Interpretability**: The marginal distributions and dependence structure can be modeled separately.
+3. **Tail dependence**: Different copulas can capture different types of tail dependence.
+
+## Common Copula Families
+
+Several copula families are available for modeling different dependence structures:
+
+- **Gaussian copula**: Based on the multivariate normal distribution
+- **t copula**: Based on the multivariate t distribution, with stronger tail dependence
+- **Archimedean copulas**: Including Clayton, Gumbel, and Frank copulas
+- **Vine copulas**: For flexible modeling of high-dimensional dependencies
