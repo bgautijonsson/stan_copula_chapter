@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.6.40">
+<meta name="generator" content="quarto-1.6.43">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -55,7 +55,27 @@ div.sourceCode
 @media screen {
 pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
 }
-</style>
+/* CSS for citations */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+  margin-bottom: 0em;
+}
+.hanging-indent div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}</style>
 
 
 <script src="site_libs/quarto-nav/quarto-nav.js"></script>
@@ -69,7 +89,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="site_libs/quarto-html/anchor.min.js"></script>
 <link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-549806ee2085284f45b00abea8c6df48.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-d4d76bf8491c20bad77d141916dc28e1.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
 <link href="site_libs/bootstrap/bootstrap-79108a0fc1995748cbd19a5b0e3e3e7c.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
@@ -150,6 +170,7 @@ window.Quarto = {
   <li><a href="#general-structure-of-copula-models-in-stan" id="toc-general-structure-of-copula-models-in-stan" class="nav-link" data-scroll-target="#general-structure-of-copula-models-in-stan">General Structure of Copula Models in Stan</a></li>
   <li><a href="#gaussian-copula-example" id="toc-gaussian-copula-example" class="nav-link" data-scroll-target="#gaussian-copula-example">Gaussian Copula Example</a></li>
   <li><a href="#advantages-of-copulas" id="toc-advantages-of-copulas" class="nav-link" data-scroll-target="#advantages-of-copulas">Advantages of Copulas</a></li>
+  <li><a href="#common-pitfalls-and-considerations" id="toc-common-pitfalls-and-considerations" class="nav-link" data-scroll-target="#common-pitfalls-and-considerations">Common Pitfalls and Considerations</a></li>
   <li><a href="#common-copula-families" id="toc-common-copula-families" class="nav-link" data-scroll-target="#common-copula-families">Common Copula Families</a></li>
   </ul></li>
   </ul>
@@ -189,148 +210,200 @@ window.Quarto = {
 
 <section id="copulas.chapter" class="level1">
 <h1>Copulas</h1>
-<p>Copulas provide a flexible way to model multivariate distributions by separating the marginal distributions from the dependence structure. This chapter introduces copulas in Stan, focusing on implementation techniques and practical examples.</p>
+<p>Copulas provide a flexible way to model multivariate distributions by separating the marginal cumulative distribution functions from the dependence structure. This chapter introduces copulas in Stan, focusing on implementation techniques and practical examples.</p>
 <section id="what-are-copulas" class="level2">
 <h2 class="anchored" data-anchor-id="what-are-copulas">What Are Copulas?</h2>
-<p>Copulas are functions that join univariate marginal distributions to form multivariate distributions. According to Sklar’s theorem, any multivariate distribution can be expressed in terms of its marginals and a copula that captures the dependence structure.</p>
-<p>For a multivariate random variable <span class="math inline">\(X = (X_1, \ldots, X_D)\)</span> with marginal distribution functions <span class="math inline">\(F_i\)</span>, the joint distribution can be written as:</p>
+<p>According to Sklar’s theorem <span class="citation" data-cites="sklar1959">(<a href="#ref-sklar1959" role="doc-biblioref">Sklar 1959</a>)</span>, any multivariate distribution can be expressed in terms of its marginals and a copula that captures the dependence structure. Copulas are functions that join univariate marginal cumulative distribution functions to form multivariate distributions.</p>
+<p>For a multivariate random variable <span class="math inline">\(\mathbf{X} = [X_1 \cdots X_D]^\top\)</span> with marginal cumulative distribution functions <span class="math inline">\(F_i\)</span>, the joint cumulative distribution function can be written as:</p>
 <p><span class="math display">\[
-H(X) = C(F_1(X_1), \ldots, F_D(X_D))
+F_{\mathbf{X}}(\mathbf{x}) = C(F_1(x_1), \ldots, F_D(x_D)) = \Pr[X_1 \leq x_1, \ldots, X_D \leq x_D]
 \]</span></p>
-<p>where <span class="math inline">\(C\)</span> is the copula function, <span class="math inline">\(H\)</span> is the joint cumulative distribution function, and <span class="math inline">\(F_i\)</span> are the marginal CDFs.</p>
+<p>where <span class="math inline">\(C\)</span> is the copula function, <span class="math inline">\(F_{\mathbf{X}}\)</span> is the joint cumulative distribution function, and <span class="math inline">\(F_i\)</span> are the marginal cumulative distribution functions. The copula function <span class="math inline">\(C\)</span> must be a joint cumulative distribution function over the unit hypercube <span class="math inline">\([0, 1]^D\)</span>.</p>
 </section>
 <section id="general-structure-of-copula-models-in-stan" class="level2">
 <h2 class="anchored" data-anchor-id="general-structure-of-copula-models-in-stan">General Structure of Copula Models in Stan</h2>
-<p>When implementing copulas in Stan, we follow a general pattern that separates the marginal distributions from the dependence structure. The log density of a multivariate distribution using a copula can be written as:</p>
+<p>This section describes the general structure of copula models in Stan. The next sections will provide specific examples of copula implementations, but first, let’s understand the general pattern that separates the marginal distributions from the dependence structure.</p>
+<p>The log density of a multivariate distribution using a copula can be written as:</p>
 <p><span class="math display">\[
-\log h(X) = \log c\left(u_1, \dots, u_D \vert \theta_{c}\right) + \sum_{i=1}^D \log f_i(X_i \vert \theta_i)
+\log h(\mathbf{x}) = \log c\left(u_1, \dots, u_D \vert \boldsymbol{\alpha}\right) + \sum_{i=1}^D \log f_i(x_i \vert \boldsymbol{\beta}_i)
 \]</span></p>
 <p>where:</p>
 <ul>
-<li><span class="math inline">\(u_i = F_i(X_i \vert \theta_i)\)</span> are the probability integral transforms of the data</li>
-<li><span class="math inline">\(\log c\left(u_1, \dots, u_D \vert \theta_{c}\right)\)</span> is the log density of the copula</li>
-<li><span class="math inline">\(\sum_{i=1}^D \log f_i(X_i \vert \theta_i)\)</span> is the sum of the log densities of the marginals</li>
+<li><span class="math inline">\(u_i = F_i(x_i \vert \boldsymbol{\beta}_i)\)</span> are the probability integral transforms of the data</li>
+<li><span class="math inline">\(\log c\left(u_1, \dots, u_D \vert \boldsymbol{\alpha}\right)\)</span> is the log density of the copula</li>
+<li><span class="math inline">\(\sum_{i=1}^D \log f_i(x_i \vert \boldsymbol{\beta}_i)\)</span> is the sum of the log densities of the marginals</li>
+<li><span class="math inline">\(\boldsymbol{\alpha}\)</span> represents the parameters describing the parametric form of the copula</li>
+<li><span class="math inline">\(\boldsymbol{\beta}_i\)</span> represents the parameters describing the parametric form of the <span class="math inline">\(i\)</span>-th marginal distribution</li>
 </ul>
-<p>A typical Stan model for copulas follows this structure:</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode stan code-with-copy"><code class="sourceCode stan"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">functions</span> {</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Copula log density function</span></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">real</span> log_c(<span class="dt">vector</span> u, <span class="dt">vector</span> theta_c) {</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Implementation of specific copula log density</span></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> {</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>  <span class="dt">int</span>&lt;<span class="kw">lower</span>=<span class="dv">0</span>&gt; N;  <span class="co">// number of observations</span></span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>  <span class="dt">int</span>&lt;<span class="kw">lower</span>=<span class="dv">0</span>&gt; D;  <span class="co">// number of dimensions</span></span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>  <span class="dt">matrix</span>[N, D] X;  <span class="co">// data</span></span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="kw">parameters</span> {</span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Parameters for marginal distributions</span></span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>  <span class="dt">vector</span>[...] theta_marginal;</span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>  </span>
-<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Parameters for copula</span></span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>  <span class="dt">vector</span>[...] theta_copula;</span>
-<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a><span class="kw">model</span> {</span>
-<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Priors for parameters</span></span>
-<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>  <span class="co">// ...</span></span>
-<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>  </span>
-<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Likelihood</span></span>
-<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (n <span class="cf">in</span> <span class="dv">1</span>:N) {</span>
-<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>    <span class="dt">vector</span>[D] u;</span>
-<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Compute marginal log densities and CDFs</span></span>
-<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> (d <span class="cf">in</span> <span class="dv">1</span>:D) {</span>
-<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a>      <span class="co">// Add marginal log density to target</span></span>
-<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>      <span class="kw">target +=</span> marginal_lpdf(X[n, d] | theta_marginal);</span>
-<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>      </span>
-<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>      <span class="co">// Transform to uniform using marginal CDF</span></span>
-<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a>      u[d] = marginal_cdf(X[n, d] | theta_marginal);</span>
-<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a>    }</span>
-<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Add copula log density to target</span></span>
-<span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a>    <span class="kw">target +=</span> log_c(u | theta_copula);</span>
-<span id="cb1-42"><a href="#cb1-42" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-<p>This structure highlights the two key components when modeling with copulas:</p>
+<p>The implementation of copulas in Stan has two key requirements:</p>
 <ol type="1">
-<li>We need both the PDFs and CDFs of the marginal distributions</li>
-<li>We need a function that computes the log density of the copula for the transformed data</li>
+<li>Both the probability density functions and cumulative distribution functions of the marginal distributions must be available</li>
+<li>A function that computes the log density of the copula for the transformed data must be implemented</li>
 </ol>
-<p>Even the independence assumption can be viewed as a special case of a copula (the independence copula), where <span class="math inline">\(\log c(\mathbf{u}) = 0\)</span>, resulting in the familiar sum of marginal log densities.</p>
+<p>Most copula implementations in Stan follow a three-step process:</p>
+<ol type="1">
+<li><strong>Accumulate marginal log likelihoods</strong>: Calculate and add the log density of each marginal distribution to the target log density</li>
+<li><strong>Transform to uniform variables</strong>: Apply the marginal CDFs to transform the data to uniform variables on the unit interval</li>
+<li><strong>Calculate copula density</strong>: Compute the log density of the copula based on these uniform variables and add it to the target log density</li>
+</ol>
+<p>This process is reflected in the general form of the log density shown above, where the first term represents the copula density and the second term represents the sum of marginal log densities.</p>
+<p>In a way, we are always modeling with copulas, as the independence assumption can be viewed as a special case using the independence copula, where <span class="math inline">\(\log c(\mathbf{u}) = 0\)</span>, resulting in the familiar sum of marginal log densities. This perspective highlights that traditional independent modeling is just a specific case within the broader copula framework.</p>
+<p>Most parametric copula families include independence as a special case, either as a subset of their parameter space (e.g., when correlation parameters are zero) or as a limit when parameters approach specific values (e.g., when the dependence parameter approaches zero in Archimedean copulas).</p>
 </section>
 <section id="gaussian-copula-example" class="level2">
 <h2 class="anchored" data-anchor-id="gaussian-copula-example">Gaussian Copula Example</h2>
-<p>The Gaussian copula is one of the most commonly used copulas due to its simplicity and interpretability. Here’s a basic implementation in Stan:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode stan code-with-copy"><code class="sourceCode stan"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> {</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">int</span>&lt;<span class="kw">lower</span>=<span class="dv">0</span>&gt; N;  <span class="co">// number of observations</span></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">int</span>&lt;<span class="kw">lower</span>=<span class="dv">0</span>&gt; D;  <span class="co">// number of dimensions</span></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">vector</span>&lt;<span class="kw">lower</span>=<span class="dv">0</span>&gt;[D] y[N];  <span class="co">// data</span></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="kw">parameters</span> {</span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Parameters for exponential marginal distributions</span></span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>  <span class="dt">vector</span>&lt;<span class="kw">lower</span>=<span class="dv">0</span>&gt;[D] lambda;  <span class="co">// rate parameters</span></span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>  </span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Correlation matrix for Gaussian copula</span></span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>  <span class="dt">cholesky_factor_corr</span>[D] L_Omega;</span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a><span class="kw">model</span> {</span>
-<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Priors</span></span>
-<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>  lambda ~ gamma(<span class="dv">2</span>, <span class="dv">1</span>);  <span class="co">// prior for rate parameters</span></span>
-<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>  L_Omega ~ lkj_corr_cholesky(<span class="dv">2</span>);</span>
-<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>  </span>
-<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Likelihood using Gaussian copula with exponential marginals</span></span>
-<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (n <span class="cf">in</span> <span class="dv">1</span>:N) {</span>
-<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>    <span class="dt">vector</span>[D] z;</span>
-<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> (d <span class="cf">in</span> <span class="dv">1</span>:D) {</span>
-<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>      <span class="co">// Add exponential log density to target</span></span>
-<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a>      <span class="kw">target +=</span> exponential_lpdf(y[n, d] | lambda[d]);</span>
-<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a>      </span>
-<span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a>      <span class="co">// Transform to uniform using exponential CDF</span></span>
-<span id="cb2-28"><a href="#cb2-28" aria-hidden="true" tabindex="-1"></a>      <span class="dt">real</span> u_d = exponential_cdf(y[n, d], lambda[d]);</span>
-<span id="cb2-29"><a href="#cb2-29" aria-hidden="true" tabindex="-1"></a>      </span>
-<span id="cb2-30"><a href="#cb2-30" aria-hidden="true" tabindex="-1"></a>      <span class="co">// Transform to standard normal</span></span>
-<span id="cb2-31"><a href="#cb2-31" aria-hidden="true" tabindex="-1"></a>      z[d] = inv_Phi(u_d);</span>
-<span id="cb2-32"><a href="#cb2-32" aria-hidden="true" tabindex="-1"></a>    }</span>
-<span id="cb2-33"><a href="#cb2-33" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Multivariate normal log density with correlation matrix</span></span>
-<span id="cb2-34"><a href="#cb2-34" aria-hidden="true" tabindex="-1"></a>    z ~ multi_normal_cholesky(rep_vector(<span class="dv">0</span>, D), L_Omega);</span>
-<span id="cb2-35"><a href="#cb2-35" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb2-36"><a href="#cb2-36" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb2-37"><a href="#cb2-37" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-38"><a href="#cb2-38" aria-hidden="true" tabindex="-1"></a><span class="kw">generated quantities</span> {</span>
-<span id="cb2-39"><a href="#cb2-39" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Recover correlation matrix from Cholesky factor</span></span>
-<span id="cb2-40"><a href="#cb2-40" aria-hidden="true" tabindex="-1"></a>  <span class="dt">matrix</span>[D, D] Omega = multiply_lower_tri_self_transpose(L_Omega);</span>
-<span id="cb2-41"><a href="#cb2-41" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>The Gaussian copula is constructed using the multivariate normal distribution. For a <span class="math inline">\(D\)</span>-dimensional random vector <span class="math inline">\(\mathbf{X}\)</span> with marginals <span class="math inline">\(F_i\)</span>, the log Gaussian copula density is given by:</p>
+<p><span class="math display">\[
+\begin{aligned}
+\log c(\mathbf{u}) &amp;=
+-\frac{1}{2} \log |\boldsymbol{\Omega}| -\frac{1}{2} \mathbf{z}^\top (\boldsymbol{\Omega}^{-1} - \mathbf{I}) \mathbf{z} \\
+&amp; =
+-\frac{1}{2} \log |\boldsymbol{\Omega}| -\frac{1}{2} \mathbf{z}^\top \boldsymbol{\Omega}^{-1} \mathbf{z} + \frac{1}{2} \mathbf{z}^\top \mathbf{z} \\
+&amp;= \log \mathcal{N}(\mathbf{z} \mid \mathbf{0}, \boldsymbol{\Omega}) - \log \mathcal{N}(\mathbf{z} \mid \mathbf{0}, \mathbf{I})
+\end{aligned}
+\]</span></p>
+<p>where <span class="math inline">\(\mathbf{z} = [\Phi^{-1}(u_1), \ldots, \Phi^{-1}(u_D)]^\top\)</span> are the inverse normal CDF transforms of the uniform marginals, <span class="math inline">\(\boldsymbol{\Omega}\)</span> is the correlation matrix, and <span class="math inline">\(\mathbf{I}\)</span> is the identity matrix. The joint log density is then:</p>
+<p><span class="math display">\[
+\log h(\mathbf{x}) = \log c(F_1(x_1), \ldots, F_D(x_D)) + \sum_{i=1}^D \log f_i(x_i)
+\]</span></p>
+<p>Following the three-step process for implementing copulas in Stan:</p>
+<ol type="1">
+<li><strong>Accumulate marginal log likelihoods</strong>: The exponential log densities are added to the target in the line <code>target += exponential_lpdf(y[n] | lambda)</code></li>
+<li><strong>Transform to uniform variables</strong>: The exponential CDF transforms the data to uniform variables: <code>exponential_cdf(y[n, d] | lambda[d])</code></li>
+<li><strong>Calculate copula density</strong>: The transformed variables are converted to normal scale using <code>inv_Phi</code> and the multivariate normal log density is computed: <code>z ~ multi_normal_cholesky(zeros, L_Omega)</code></li>
+</ol>
+<p>The following example demonstrates a Gaussian copula with exponential marginal distributions. Note that while the copula is Gaussian, the marginals are exponential.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode stan code-with-copy"><code class="sourceCode stan"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> {</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">int</span>&lt;<span class="kw">lower</span>=<span class="dv">0</span>&gt; N;  <span class="co">// number of observations</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">int</span>&lt;<span class="kw">lower</span>=<span class="dv">0</span>&gt; D;  <span class="co">// number of dimensions</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">vector</span>&lt;<span class="kw">lower</span>=<span class="dv">0</span>&gt;[D] y[N];  <span class="co">// data</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="kw">transformed data</span> {</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="dt">vector</span>[D] zeros = rep_vector(<span class="dv">0</span>, D);</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="kw">parameters</span> {</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Parameters for exponential marginal distributions</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>  <span class="dt">vector</span>&lt;<span class="kw">lower</span>=<span class="dv">0</span>&gt;[D] lambda;  <span class="co">// rate parameters</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Correlation matrix for Gaussian copula</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>  <span class="dt">cholesky_factor_corr</span>[D] L_Omega;</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a><span class="kw">model</span> {</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Priors</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>  lambda ~ gamma(<span class="dv">2</span>, <span class="dv">1</span>);  <span class="co">// prior for rate parameters</span></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>  L_Omega ~ lkj_corr_cholesky(<span class="dv">2</span>);</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Likelihood using Gaussian copula with exponential marginals</span></span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (n <span class="cf">in</span> <span class="dv">1</span>:N) {</span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Add exponential log density to target</span></span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>    <span class="kw">target +=</span> exponential_lpdf(y[n] | lambda);</span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>    <span class="dt">vector</span>[D] z;</span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> (d <span class="cf">in</span> <span class="dv">1</span>:D) {</span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>      <span class="co">// Transform to uniform using exponential CDF</span></span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>      <span class="dt">real</span> u_d = exponential_cdf(y[n, d] | lambda[d]);</span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a>      </span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>      <span class="co">// Transform to standard normal</span></span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>      z[d] = inv_Phi(u_d);</span>
+<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Multivariate normal log density with correlation matrix</span></span>
+<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a>    z ~ multi_normal_cholesky(zeros, L_Omega);</span>
+<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-42"><a href="#cb1-42" aria-hidden="true" tabindex="-1"></a><span class="kw">generated quantities</span> {</span>
+<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Optional: Recover correlation matrix from Cholesky factor</span></span>
+<span id="cb1-44"><a href="#cb1-44" aria-hidden="true" tabindex="-1"></a>  <span class="dt">matrix</span>[D, D] Omega = multiply_lower_tri_self_transpose(L_Omega);</span>
+<span id="cb1-45"><a href="#cb1-45" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </section>
 <section id="advantages-of-copulas" class="level2">
 <h2 class="anchored" data-anchor-id="advantages-of-copulas">Advantages of Copulas</h2>
 <p>Copulas offer several advantages in statistical modeling:</p>
 <ol type="1">
-<li><strong>Flexibility</strong>: They allow combining any marginal distributions with various dependence structures.</li>
-<li><strong>Interpretability</strong>: The marginal distributions and dependence structure can be modeled separately.</li>
-<li><strong>Tail dependence</strong>: Different copulas can capture different types of tail dependence.</li>
+<li><p><strong>Flexibility</strong>: They allow combining any marginal distributions with various dependence structures. For example:</p>
+<ul>
+<li>Modeling financial returns with heavy-tailed marginals and complex dependence structures</li>
+<li>Combining different types of distributions (e.g., normal and gamma) in a single model</li>
+<li>Capturing asymmetric dependencies between variables, such as in financial markets where joint negative returns are more common than joint positive returns due to macro-events affecting multiple stocks simultaneously, while positive returns tend to be more idiosyncratic</li>
+<li>Modeling different types of tail dependence in different parts of the distribution</li>
+</ul></li>
+<li><p><strong>Factorability</strong>: The marginal distributions and dependence structure can be modeled separately, allowing for different prior knowledge about each component. This is similar to the common practice of factoring scale and correlation in multivariate normal priors.</p>
+<p>For example, when modeling the survival times of two components in a system, we can separately specify exponential or gamma marginal distributions based on historical failure data for each component, and a Gaussian copula (or asymmetrical Archimedean copula) capturing how the failure of one component affects the other, making it easier to incorporate prior knowledge about each aspect independently.</p></li>
+<li><p><strong>Tail dependence</strong>: Different copulas can capture different types of tail dependence, which is crucial in applications like risk management and extreme value analysis where joint extreme scenarios need to be quantified.</p></li>
+<li><p><strong>Universal Framework</strong>: In a way, we are always modeling with copulas, as the independence assumption can be viewed as a special case using the independence copula. This perspective highlights that traditional independent modeling is just a specific case within the broader copula framework.</p></li>
+</ol>
+</section>
+<section id="common-pitfalls-and-considerations" class="level2">
+<h2 class="anchored" data-anchor-id="common-pitfalls-and-considerations">Common Pitfalls and Considerations</h2>
+<p>When implementing copulas in Stan, several considerations should be kept in mind:</p>
+<ol type="1">
+<li><p><strong>Computational efficiency</strong>: The probability integral transform and inverse transform steps can be computationally intensive, especially for complex marginal distributions.</p></li>
+<li><p><strong>Parameter identifiability</strong>: Care must be taken to ensure that the parameters of the marginal distributions and the copula are identifiable.</p></li>
+<li><p><strong>Model selection</strong>: The choice of copula family should be guided by the specific dependence structure of the data. For example:</p>
+<ul>
+<li>The Gaussian copula may underestimate the probability of joint extreme events in financial data</li>
+<li>The Student-t copula, while offering tail dependence, maintains symmetric tail behavior that may not match all applications</li>
+<li>Archimedean copulas can model asymmetric tail dependence but may be less flexible and harder to estimate in high dimensions</li>
+</ul></li>
+<li><p><strong>Numerical stability</strong>: The transformations between different scales (original, uniform, and normal/Student-t/calculations using Archimedian copulas) require careful implementation to maintain numerical stability.</p></li>
+<li><p><strong>Symmetry considerations</strong>: Many copula families exhibit strong symmetries that may not match the data:</p>
+<ul>
+<li><strong>Radial symmetry</strong>: Some copulas (like Gaussian and Student-t) treat positive and negative extremes equally, which may not match financial data where joint negative returns are more common than joint positive returns</li>
+<li><strong>Exchangeability</strong>: Some copulas are invariant under permutations of their arguments, which can lead to unintuitive results when combined with inhomogeneous marginals. For example, when modeling time-to-event scenarios with different marginal distributions (e.g., exponential distributions with different parameters), perfect dependence in the copula does not imply simultaneous events. Instead, one event triggers the other at a later time corresponding to the same quantile, which can lead to incorrect modeling of joint events.</li>
+</ul></li>
+<li><p><strong>Tail dependence</strong>: Understanding and choosing appropriate tail dependence is crucial:</p>
+<ul>
+<li>The upper (lower) tail dependence coefficient <span class="math inline">\(\lambda_U (\lambda_L)\)</span> is the probability that one variable is extremely large (small) given that another is extremely large (small).</li>
+<li>Different copula families exhibit different tail dependence properties:
+<ul>
+<li>Some copulas (like Gaussian) have zero tail dependence</li>
+<li>Others can model symmetric tail dependence (<span class="math inline">\(\lambda_U = \lambda_L\)</span>)</li>
+<li>Some can capture asymmetric tail dependence (<span class="math inline">\(\lambda_U \neq \lambda_L\)</span>)</li>
+<li>Certain copulas allow for tail dependence even with zero correlation</li>
+</ul></li>
+<li>The choice of copula should be guided by the expected tail behavior in the application:
+<ul>
+<li>Financial data often requires modeling joint lower extreme events</li>
+<li>Risk management applications may need asymmetric tail dependence</li>
+<li>Some applications may require different tail behavior in different parts of the distribution</li>
+</ul></li>
+</ul></li>
+<li><p><strong>High-dimensional modeling</strong>: As dimensionality increases:</p>
+<ul>
+<li>The number of dependence parameters grows</li>
+<li>Some copula families become less flexible</li>
+<li>Vine copulas or factor copulas may be more appropriate</li>
+</ul></li>
 </ol>
 </section>
 <section id="common-copula-families" class="level2">
 <h2 class="anchored" data-anchor-id="common-copula-families">Common Copula Families</h2>
-<p>Several copula families are available for modeling different dependence structures:</p>
+<p>Several copula families are available for modeling different dependence structures in the correlation component:</p>
 <ul>
-<li><strong>Gaussian copula</strong>: Based on the multivariate normal distribution</li>
-<li><strong>t copula</strong>: Based on the multivariate t distribution, with stronger tail dependence</li>
-<li><strong>Archimedean copulas</strong>: Including Clayton, Gumbel, and Frank copulas</li>
-<li><strong>Vine copulas</strong>: For flexible modeling of high-dimensional dependencies</li>
+<li><strong>Gaussian copula</strong>: Based on the multivariate normal distribution, offering symmetric dependence</li>
+<li><strong>Student-t copula</strong>: Based on the multivariate Student-t distribution, providing more flexibility in tail dependence than the Gaussian copula</li>
+<li><strong>Archimedean copulas</strong>: A class of copulas defined through generator functions, including:
+<ul>
+<li>Clayton copula: Stronger lower tail dependence</li>
+<li>Gumbel copula: Stronger upper tail dependence</li>
+<li>Frank copula: Symmetric dependence</li>
+</ul></li>
+<li><strong>Vine copulas</strong>: A flexible approach for modeling high-dimensional dependencies by decomposing the joint distribution into a series of bivariate copulas</li>
 </ul>
 
 
+
 </section>
 </section>
 
-</main> <!-- /main -->
+<div id="quarto-appendix" class="default"><section class="quarto-appendix-contents" role="doc-bibliography" id="quarto-bibliography"><h2 class="anchored quarto-appendix-heading">References</h2><div id="refs" class="references csl-bib-body hanging-indent" data-entry-spacing="0" role="list">
+<div id="ref-sklar1959" class="csl-entry" role="listitem">
+Sklar, M. 1959. <span>“Fonctions de Répartition à n Dimensions Et Leurs Marges.”</span> <em>Annales de l’ISUP</em> VIII (3): 229–31. <a href="https://hal.science/hal-04094463">https://hal.science/hal-04094463</a>.
+</div>
+</div></section></div></main> <!-- /main -->
 <script id="quarto-html-after-body" type="application/javascript">
 window.document.addEventListener("DOMContentLoaded", function (event) {
   const toggleBodyColorMode = (bsSheetEl) => {
